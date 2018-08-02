@@ -1,0 +1,26 @@
+{
+  "name": "CloutHunters",
+  "version": "3",
+  "description": "Yes.",
+  "scripts": {
+  "start": "node bot.js"
+   }, 
+   "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soulpower11/CloutHunters"
+  },
+  "author": "soulpower11",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/soulpower11/CloutHunters/issues"
+  },
+  "dependencies": {
+    "discord.js": "latest",
+    "mongodb" : "latest",
+    "snekfetch": "latest"
+  },
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "homepage": "https://github.com/soulpower11/CloutHunters"
+}
