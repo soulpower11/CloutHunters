@@ -1,6 +1,6 @@
 {
   "name": "CloutHunters",
-  "version": "3",
+  "version": "3.0.0",
   "description": "Yes.",
   "scripts": {
   "start": "node bot.js"
