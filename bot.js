@@ -12,7 +12,7 @@ const images = process.env.IMAGES;
 
 var bot = new Discord.Client();
 
-var gamestring = `${prefix}help | v3`;
+var gamestring = `${prefix}help | v3.0.0`;
 
 function logCommand(message) {
     console.log(`[${new Date()}] | [${message.guild}] ${message.author.username} : ${message.content}`);
