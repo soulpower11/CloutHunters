@@ -58,7 +58,7 @@ function fixEffect(effect) {
                 if (newEffect[i].includes("In battle") || newEffect[i].includes("Outside of battle")) {
                     newEffect[i] = "**" + newEffect[i] + "**";
                 }
-                else if (newEffect[i].includes("Generation")) {
+                else if (newEffect[i].startsWith("Generation")) {
                     newEffect[i] = "__" + newEffect[i] + "__";
                 }
                 returnEffect[a] = returnEffect[a] + newEffect[i] + "\n";
