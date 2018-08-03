@@ -12,7 +12,7 @@ const images = process.env.IMAGES;
 
 var bot = new Discord.Client();
 
-var gamestring = `${prefix}help | v4.0.0`;
+var gamestring = `${prefix}help | v5.0.0`;
 
 function getAlias(command) {
     if (command.toLocaleLowerCase() == "a") {
@@ -38,6 +38,9 @@ function getAlias(command) {
     }
     else if (command.toLocaleLowerCase() == "chart" || command.toLocaleLowerCase() == "typ" || command.toLocaleLowerCase() == "typechart") {
         return "type";
+    }
+    else if (command.toLocaleLowerCase() == "loc" || command.toLocaleLowerCase() == "spawn") {
+        return "location";
     }
     else {
         return command;
@@ -176,7 +179,8 @@ bot.on("message", async function (message) {
                         + "`server`, `announce`, `autorole`\n"
                         + "**PokeOne:**\n"
                         + "`ability`, `eggmove`, `hp`, `learnset`, `move`\n"
-                        + "`nature`, `pokemon`, `time`, `tm`, `type`"
+                        + "`nature`, `pokemon`, `time`, `tm`, `type`\n"
+                        + "`location``"
                     )
                     .setFooter(`Type ${prefix}help [group] for more information.`)
                 message.channel.send(embed);
@@ -209,6 +213,7 @@ bot.on("message", async function (message) {
                             + "\n`" + prefix + "time` - Gives information on when timed events begin and end."
                             + "\n`" + prefix + "tm [pokemon name]` - Lists the available TMs and HMs that can be learnt by given Pokemon."
                             + "\n`" + prefix + "type [type]` - Lists type advantages and disadvantages for given type, or type combination."
+                            + "\n`" + prefix + "location [location name]` - Lists Pokemon encounters at the location."
                         );
                         break;
                     default:
@@ -1214,6 +1219,50 @@ bot.on("message", async function (message) {
             logCommand(message);
             break;
         //End
+        case "location":
+            if (!args[1]) {
+                return message.channel.send(`Please input a Location - use **${prefix}help pokeone** for more info!`);
+            }
+            var color;
+
+            var search = args.splice(1, args.length).join(" ").toLowerCase();
+            if (search.startsWith("pokemon mansion")) {
+                search = "pokemon mansion 1f/2f/3f";
+            }
+
+            var route = "/public/spawns/";
+            var apifull = api + route + search;
+
+            var { body } = await snekfetch.get(apifull);
+
+            if (body.status == "404") {
+                return message.channel.send(`Location: \`${search}\` not found. Please double check spelling! or Location has no Pokemon encounter.`);
+            }
+
+            if (body.data.region == "Kanto") {
+                color = 0x80BB1D
+            }
+            else if (body.data.region == "Johto") {
+                color = 0xCAC02E;
+            }
+
+            var embed = new Discord.RichEmbed()
+                .setTitle(`${body.data.area} (${body.data.region})`)
+                .setColor(color)
+                .setDescription(`**Pokemon Encounters:**`)
+                .setFooter(`ToD = Time of Day, EM = Encounter Method, M = Morning, D = Day, N = Night, E = Evening`)
+            for (var index = 0; index < body.data.pokemon.length; index++) {
+                embed.addField(`__${body.data.pokemon[index].name}__`,
+                    `**ToD:** ${body.data.pokemon[index]["time of day"]}` +
+                    `\n**EM:** ${body.data.pokemon[index]["encounter method"]}` +
+                    `\n**Rarity:** ${body.data.pokemon[index].rarity}`
+                    , true);
+            }
+
+            message.channel.send(embed).catch(console.error);
+
+            logCommand(message);
+            break;
         default:
             break;
     }
