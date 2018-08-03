@@ -12,7 +12,62 @@ const images = process.env.IMAGES;
 
 var bot = new Discord.Client();
 
-var gamestring = `${prefix}help | v3.0.0`;
+var gamestring = `${prefix}help | v4.0.0`;
+
+function getAlias(command) {
+    if (command.toLocaleLowerCase() == "a") {
+        return "ability";
+    }
+    else if (command.toLocaleLowerCase() == "egg" || command.toLocaleLowerCase() == "em") {
+        return "eggmove";
+    }
+    else if (command.toLocaleLowerCase() == "level" || command.toLocaleLowerCase() == "learn" || command.toLocaleLowerCase() == "set") {
+        return "learnset";
+    }
+    else if (command.toLocaleLowerCase() == "m") {
+        return "move";
+    }
+    else if (command.toLocaleLowerCase() == "n") {
+        return "nature";
+    }
+    else if (command.toLocaleLowerCase() == "poke" || command.toLocaleLowerCase() == "p") {
+        return "pokemon";
+    }
+    else if (command.toLocaleLowerCase() == "hm") {
+        return "tm";
+    }
+    else if (command.toLocaleLowerCase() == "chart" || command.toLocaleLowerCase() == "typ" || command.toLocaleLowerCase() == "typechart") {
+        return "type";
+    }
+    else {
+        return command;
+    }
+}
+
+function fixEffect(effect) {
+    var returnEffect = ["", "", "", "", "", ""];
+    var newEffect = effect.split(/\n/);
+    var i = 0;
+    for (var a = 0; a < returnEffect.length; a++) {
+        while (i < newEffect.length) {
+            var char = returnEffect[a].length + newEffect[i].length;
+            if (char > 1024) {
+                break;
+            }
+            else {
+                if (newEffect[i].includes("In battle") || newEffect[i].includes("Outside of battle")) {
+                    newEffect[i] = "**" + newEffect[i] + "**";
+                }
+                else if (newEffect[i].includes("Generation")) {
+                    newEffect[i] = "__" + newEffect[i] + "__";
+                }
+                returnEffect[a] = returnEffect[a] + newEffect[i] + "\n";
+                i++;
+            }
+        }
+    }
+    return returnEffect;
+}
 
 function logCommand(message) {
     console.log(`[${new Date()}] | [${message.guild}] ${message.author.username} : ${message.content}`);
@@ -77,32 +132,7 @@ bot.on("message", async function (message) {
 
     var args = message.content.substring(prefix.length).split(/\s+/);
 
-    if (args[0].toLocaleLowerCase() == "a") {
-        args[0] = "ability";
-    }
-    else if (args[0].toLocaleLowerCase() == "egg" || args[0].toLocaleLowerCase() == "em") {
-        args[0] = "eggmove";
-    }
-    else if (args[0].toLocaleLowerCase() == "level" || args[0].toLocaleLowerCase() == "learn" || args[0].toLocaleLowerCase() == "set") {
-        args[0] = "learnset";
-    }
-    else if (args[0].toLocaleLowerCase() == "m") {
-        args[0] = "move";
-    }
-    else if (args[0].toLocaleLowerCase() == "n") {
-        args[0] = "nature";
-    }
-    else if (args[0].toLocaleLowerCase() == "poke" || args[0].toLocaleLowerCase() == "p") {
-        args[0] = "pokemon";
-    }
-    else if (args[0].toLocaleLowerCase() == "hm") {
-        args[0] = "tm";
-    }
-    else if (args[0].toLocaleLowerCase() == "chart" || args[0].toLocaleLowerCase() == "typ" || args[0].toLocaleLowerCase() == "typechart") {
-        args[0] = "type";
-    }
-
-    switch (args[0].toLocaleLowerCase()) {
+    switch (getAlias(args[0]).toLocaleLowerCase()) {
         case "die":
             if (message.author.id == USERID_MAIN || message.author.id == USERID_SOUL) {
                 var iconurl = bot.user.avatarURL;
@@ -460,6 +490,7 @@ bot.on("message", async function (message) {
                 .setAuthor(guild.name, iconurl)
                 .setColor([0, 255, 0])
                 .setDescription(desc)
+                .setFooter(`Owner: ${message.guild.owner.user.tag}  `)
             message.channel.send(embed);
 
             logCommand(message);
@@ -474,26 +505,28 @@ bot.on("message", async function (message) {
             var search = args.splice(1, args.length).join(" ").toLowerCase();
 
             var route = "/public/ability/";
-
             var apifull = api + route + search;
 
-            snekfetch.get(apifull).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apifull);
 
-                if (body.status == "404") {
-                    return message.channel.send(`Ability: \`${search}\` not found. Please double check spelling!`);
+            if (body.status == "404") {
+                return message.channel.send(`Ability: \`${search}\` not found. Please double check spelling!`);
+            }
+
+            var effect = fixEffect(body.info.effect);
+
+            var embed = new Discord.RichEmbed()
+                .setTitle(`__${body.info.name}__`)
+                .addField(`Ability Description:`, `${body.info.description}`, false)
+            for (var i = 0; i < effect.length; i++) {
+                if (i == 0) {
+                    embed.addField(`Effect:`, `${effect[i]}`, false)
                 }
-
-                var embed = new Discord.RichEmbed()
-                    .setTitle(`__${body.info.name}__`)
-                    .addField(`Ability Description:`, `${body.info.description}`, false)
-                    .addField(`Effect:`, `\u200B${body.info.effect}`, false)
-
-                message.channel.send("", {
-                    embed: embed
-                }).catch(console.error)
-
-            });
+                else if (effect[i] != "") {
+                    embed.addField(`\u200B`, `${effect[i]}`, false)
+                }
+            }
+            message.channel.send(embed).catch(console.error);
 
             logCommand(message);
             break;
@@ -501,6 +534,7 @@ bot.on("message", async function (message) {
             if (!args[1]) {
                 return message.channel.send(`Please input a Pokemon - use **${prefix}help pokeone** for more info!`);
             }
+
             var search = args.splice(1, args.length);
             var isShiny = false;
             if (search[0].toLowerCase() == "shiny") {
@@ -510,41 +544,36 @@ bot.on("message", async function (message) {
             search = search.join(" ").toLowerCase();
 
             var route = "/public/pokemon/";
-
             var apifull = api + route + search;
 
-            snekfetch.get(apifull).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apifull);
 
-                if (body.status == "404") {
-                    return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
+            if (body.status == "404") {
+                return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
+            }
+
+            var array = new Array();
+
+            for (var index = 0; index < body.info.move_learnsets[1].regular_learnset.length; index++) {
+                if (body.info.move_learnsets[1].regular_learnset[index].egg_move != null) {
+                    array[index] = body.info.move_learnsets[1].regular_learnset[index].move;
                 }
+            }
+            if (array.length == 0) {
+                var array = `${body.info.names.en} cannot learn any egg moves!`
+            }
 
-                var array = new Array();
+            var embed = new Discord.RichEmbed()
+                .setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
+                .setColor(0x0000C8)
+                .addField("Egg Move List", array, true)
+            if (isShiny) {
+                embed.setThumbnail(shinyImages + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
+            } else {
+                embed.setThumbnail(images + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
+            }
+            message.channel.send(embed).catch(console.error)
 
-                for (var index = 0; index < body.info.move_learnsets[1].regular_learnset.length; index++) {
-                    if (body.info.move_learnsets[1].regular_learnset[index].egg_move != null) {
-                        array[index] = body.info.move_learnsets[1].regular_learnset[index].move;
-                    }
-                }
-                if (array.length == 0) {
-                    var array = `${body.info.names.en} cannot learn any egg moves!`
-                }
-
-                var embed = new Discord.RichEmbed()
-                    .setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
-                    .setColor(0x0000C8)
-                    .addField("Egg Move List", array, true)
-                if (isShiny) {
-                    embed.setThumbnail(shinyImages + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
-                } else {
-                    embed.setThumbnail(images + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
-                }
-                message.channel.send("", {
-                    embed: embed
-                }).catch(console.error)
-
-            });
             logCommand(message);
             break;
         case "hp":
@@ -554,6 +583,8 @@ bot.on("message", async function (message) {
             var SpAtkIV = args[4];
             var SpDefIV = args[5];
             var SpeedIV = args[6];
+
+            var color, type;
 
             if (!args[6] || args.length > 7) {
                 return message.channel.send(`Please input exactly 6 valid IVs. Input your Pokemon's IVs separated by a space: **${prefix}hp 23 19 16 7 16 20** - use **${prefix}help pokeone** for more info!`);
@@ -602,171 +633,83 @@ bot.on("message", async function (message) {
             var total = Math.floor(((HPIV + (2 * AttackIV) + (4 * DefenseIV) + (8 * SpeedIV) + (16 * SpAtkIV) + (32 * SpDefIV)) * 15) / 63)
 
             if (total == "0") {
-                var fightingtype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0xDC7633)
-                    .setDescription(`Type: Fighting`)
-
-                message.channel.send("", {
-                    embed: fightingtype
-                }).catch(console.error);
+                color = 0xDC7633;
+                type = "Fighting";
             }
-            if (total == "1") {
-                var flyingtype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x9696FF)
-                    .setDescription(`Type: Flying`)
-
-                message.channel.send("", {
-                    embed: flyingtype
-                }).catch(console.error);
+            else if (total == "1") {
+                color = 0x9696FF;
+                type = "Flying";
             }
-            if (total == "2") {
-                var poisontype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0xC814FF)
-                    .setDescription(`Type: Poison`)
-
-                message.channel.send("", {
-                    embed: poisontype
-                }).catch(console.error);
+            else if (total == "2") {
+                color = 0xC814FF;
+                type = "Poison";
             }
-            if (total == "3") {
-                var groundtype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0xC89B00)
-                    .setDescription(`Type: Ground`)
-
-                message.channel.send("", {
-                    embed: groundtype
-                }).catch(console.error);
+            else if (total == "3") {
+                color = 0xC89B00;
+                type = "Ground";
             }
-            if (total == "4") {
-                var rocktype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0xE59866)
-                    .setDescription(`Type: Rock`)
-
-                message.channel.send("", {
-                    embed: rocktype
-                }).catch(console.error);
+            else if (total == "4") {
+                color = 0xE59866;
+                type = "Rock";
             }
-            if (total == "5") {
-                var bugtype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x007D00)
-                    .setDescription(`Type: Bug`)
-
-                message.channel.send("", {
-                    embed: bugtype
-                }).catch(console.error);
+            else if (total == "5") {
+                color = 0x007D00;
+                type = "Bug";
             }
-            if (total == "6") {
-                var ghosttype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x640096)
-                    .setDescription(`Type: Ghost`)
-
-                message.channel.send("", {
-                    embed: ghosttype
-                }).catch(console.error);
+            else if (total == "6") {
+                color = 0x640096;
+                type = "Ghost";
             }
             if (total == "7") {
-                var steeltype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x646464)
-                    .setDescription(`Type: Steel`)
-
-                message.channel.send("", {
-                    embed: steeltype
-                }).catch(console.error);
+                color = 0x646464;
+                type = "Steel";
             }
             if (total == "8") {
-                var firetype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0xFF9600)
-                    .setDescription(`Type: Fire`)
-
-                message.channel.send("", {
-                    embed: firetype
-                }).catch(console.error);
+                color = 0xFF9600;
+                type = "Fire";
             }
             if (total == "9") {
-                var watertype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x0000C8)
-                    .setDescription(`Type: Water`)
-
-                message.channel.send("", {
-                    embed: watertype
-                }).catch(console.error);
+                color = 0x0000C8;
+                type = "Water";
             }
             if (total == "10") {
-                var grasstype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x00C800)
-                    .setDescription(`Type: Grass`)
-
-                message.channel.send("", {
-                    embed: grasstype
-                }).catch(console.error);
+                color = 0x00C800;
+                type = "Grass";
             }
             if (total == "11") {
-                var electrictype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0xE7C332)
-                    .setDescription(`Type: Electric`)
-
-                message.channel.send("", {
-                    embed: electrictype
-                }).catch(console.error);
+                color = 0xE7C332;
+                type = "Electric";
             }
             if (total == "12") {
-                var psychictype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0xF032E1)
-                    .setDescription(`Type: Psychic`)
-
-                message.channel.send("", {
-                    embed: psychictype
-                }).catch(console.error);
+                color = 0xF032E1;
+                type = "Psychic";
             }
             if (total == "13") {
-                var icetype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x32E7E4)
-                    .setDescription(`Type: Ice`)
-
-                message.channel.send("", {
-                    embed: icetype
-                }).catch(console.error);
+                color = 0x32E7E4;
+                type = "Ice";
             }
             if (total == "14") {
-                var dragontype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x9B32E7)
-                    .setDescription(`Type: Dragon`)
-
-                message.channel.send("", {
-                    embed: dragontype
-                }).catch(console.error);
+                color = 0x9B32E7;
+                type = "Dragon";
             }
             if (total == "15") {
-                var darktype = new Discord.RichEmbed()
-                    .setTitle('Hidden Power')
-                    .setColor(0x5A4326)
-                    .setDescription(`Type: Dark`)
-
-                message.channel.send("", {
-                    embed: darktype
-                }).catch(console.error);
+                color = 0x5A4326;
+                type = "Dark";
             }
+
+            var embed = new Discord.RichEmbed()
+                .setTitle('Hidden Power')
+                .setColor(color)
+                .setDescription(`Type: ${type}`)
+            message.channel.send(embed).catch(console.error);
+
             logCommand(message);
             break;
         case "learnset":
             if (!args[1]) {
                 return message.channel.send(`Please input a Pokemon - use **${prefix}help pokeone** for more info!`);
             }
+
             var search = args.splice(1, args.length);
             var isShiny = false;
             if (search[0].toLowerCase() == "shiny") {
@@ -776,41 +719,36 @@ bot.on("message", async function (message) {
             search = search.join(" ").toLowerCase();
 
             var route = "/public/pokemon/";
-
             var apifull = api + route + search;
 
-            snekfetch.get(apifull).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apifull);
 
-                if (body.status == "404") {
-                    return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
+            if (body.status == "404") {
+                return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
+            }
+
+            var array = new Array();
+            for (var index = 0; index < body.info.move_learnsets[1].regular_learnset.length; index++) {
+                if (body.info.move_learnsets[1].regular_learnset[index].level != null) {
+                    array[index] = "Lvl." + body.info.move_learnsets[1].regular_learnset[index].level + " - " + body.info.move_learnsets[1].regular_learnset[index].move;
                 }
+            }
 
-                var array = new Array();
-                for (var index = 0; index < body.info.move_learnsets[1].regular_learnset.length; index++) {
-                    if (body.info.move_learnsets[1].regular_learnset[index].level != null) {
-                        array[index] = "Lvl." + body.info.move_learnsets[1].regular_learnset[index].level + " - " + body.info.move_learnsets[1].regular_learnset[index].move;
-                    }
-                }
+            if (array.length == 0) {
+                var array = "API error"
+            }
 
-                if (array.length == 0) {
-                    var array = "API error"
-                }
+            var embed = new Discord.RichEmbed()
+                .setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
+                .setColor(0x0000C8)
+                .addField("Levelling Learnset List", array, true)
+            if (isShiny) {
+                embed.setThumbnail(shinyImages + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
+            } else {
+                embed.setThumbnail(images + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
+            }
+            message.channel.send(embed).catch(console.error);
 
-                var embed = new Discord.RichEmbed()
-                    .setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
-                    .setColor(0x0000C8)
-                    .addField("Levelling Learnset List", array, true)
-                if (isShiny) {
-                    embed.setThumbnail(shinyImages + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
-                } else {
-                    embed.setThumbnail(images + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
-                }
-                message.channel.send("", {
-                    embed: embed
-                }).catch(console.error)
-
-            });
             logCommand(message);
             break;
         case "move":
@@ -821,66 +759,55 @@ bot.on("message", async function (message) {
             var search = args.splice(1, args.length).join("_").toLowerCase();
 
             var route = "/public/moves/";
-
             var apifull = api + route + search;
 
-            snekfetch.get(apifull).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apifull);
 
-                if (body.status == "404") {
-                    return message.channel.send(`Move: \`${search}\` not found. Please double check spelling!`);
-                }
+            if (body.status == "404") {
+                return message.channel.send(`Move: \`${search}\` not found. Please double check spelling!`);
+            }
 
-                var category = body.info.category.charAt(0).toUpperCase() + body.info.category.slice(1);
-                var power = body.info.power;
-                var acc = body.info.accuracy;
-                var crit = body.info.critical_hit;
+            var category = body.info.category.charAt(0).toUpperCase() + body.info.category.slice(1);
+            var power = body.info.power;
+            var acc = body.info.accuracy;
+            var crit = body.info.critical_hit;
 
-                if (category == "Status") {
-                    power = acc = crit = "−";
-                }
-                var embed = new Discord.RichEmbed()
-                    .setTitle(body.info.names.en)
-                    .setDescription(`${body.info.descriptions.en}`)
-                    .addField("Move Stats", `**Base Power:** ${power}\n**Accuracy:** ${acc}%` + "\n**Critical:** " + crit, true)
-                    .addField("\u200b", `**PP:** ${body.info.pp} (MAX: ${body.info.max_pp})\n**Type: **` + body.info.type + `\n**Category:** ` + body.info.category.charAt(0).toUpperCase() + body.info.category.slice(1), true)
+            if (category == "Status") {
+                power = acc = crit = "−";
+            }
 
-                message.channel.send("", {
-                    embed: embed
-                }).catch(console.error)
+            var embed = new Discord.RichEmbed()
+                .setTitle(body.info.names.en)
+                .setDescription(`${body.info.descriptions.en}`)
+                .addField("Move Stats", `**Base Power:** ${power}\n**Accuracy:** ${acc}%` + "\n**Critical:** " + crit, true)
+                .addField("\u200b", `**PP:** ${body.info.pp} (MAX: ${body.info.max_pp})\n**Type: **` + body.info.type + `\n**Category:** ` + body.info.category.charAt(0).toUpperCase() + body.info.category.slice(1), true)
+            message.channel.send(embed).catch(console.error);
 
-            });
             logCommand(message);
             break;
         case "nature":
             if (!args[1]) {
                 return message.channel.send(`Please input a nature - use **${prefix}help pokeone** for more info!`);
             }
+
             var search = args.splice(1, args.length).join(" ").toLowerCase();
 
             var route = "/public/nature/";
-
             var apifull = api + route + search;
 
-            snekfetch.get(apifull).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apifull);
 
-                if (body.status == "404") {
-                    return message.channel.send(`Nature: \`${search}\` not found. Please double check spelling!`);
-                }
+            if (body.status == "404") {
+                return message.channel.send(`Nature: \`${search}\` not found. Please double check spelling!`);
+            }
 
-                var embed = new Discord.RichEmbed()
-                    .setTitle(`${body.data.name}`)
-                    .addField(`__Increases:__`, `${body.data.increase}`, true)
-                    .addField(`__Decreases:__`, ` ${body.data.decrease}`, true)
-                    .addField(`\u200b`, `Pokémon with the ${body.data.name} Nature Like: ${body.data.likes} and Dislike: ${body.data.dislikes}`, false)
+            var embed = new Discord.RichEmbed()
+                .setTitle(`${body.data.name}`)
+                .addField(`__Increases:__`, `${body.data.increase}`, true)
+                .addField(`__Decreases:__`, ` ${body.data.decrease}`, true)
+                .addField(`\u200b`, `Pokémon with the ${body.data.name} Nature Like: ${body.data.likes} and Dislike: ${body.data.dislikes}`, false)
+            message.channel.send(embed).catch(console.error);
 
-
-                message.channel.send("", {
-                    embed: embed
-                }).catch(console.error)
-
-            });
             logCommand(message);
             break;
         case "pokemon":
@@ -894,186 +821,180 @@ bot.on("message", async function (message) {
                 search.splice(0, 1);
                 isShiny = true;
             }
-
             search = search.join(" ").toLowerCase();
 
             var route = "/public/pokemon/";
-
             var apifull = api + route + search;
 
-            snekfetch.get(apifull).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apifull);
 
-                if (body.status == "404") {
-                    return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
-                }
+            if (body.status == "404") {
+                return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
+            }
 
-                var abilities = new Array();
-                var evolutions = new Array();
-                var prevolution = new Array();
+            var abilities = new Array();
+            var evolutions = new Array();
+            var prevolution = new Array();
 
-                if (body.info.evolutions == null) {
-                    evolutions = `N/A`;
-                } else {
-                    for (var index = 0; index < body.info.evolutions.length; index++) {
+            if (body.info.evolutions == null) {
+                evolutions = `N/A`;
+            } else {
+                for (var index = 0; index < body.info.evolutions.length; index++) {
 
-                        //Temporary holder for the evolution and method
-                        var evo = "";
+                    //Temporary holder for the evolution and method
+                    var evo = "";
 
-                        //Who is it evolving to?
-                        var name = body.info.evolutions[index].to;
-                        evo = evo + `**${name}**`;
+                    //Who is it evolving to?
+                    var name = body.info.evolutions[index].to;
+                    evo = evo + `**${name}**`;
 
-                        //Does it require trading?
-                        var trading = body.info.evolutions[index].trade;
-                        if (trading != null) {
-                            evo = evo + " by trading";
+                    //Does it require trading?
+                    var trading = body.info.evolutions[index].trade;
+                    if (trading != null) {
+                        evo = evo + " by trading";
+                    }
+
+                    //Does it need an item to be used on it?
+                    var item = body.info.evolutions[index].item;
+                    if (item != null) {
+                        if (/[aeiouAEIOU]/.test(item.charAt(0))) {
+                            evo = evo + " using an " + item;
+                        } else {
+                            evo = evo + " using a " + item;
+                        }
+                    }
+
+                    //Does it need to hold an item?
+                    var holdItem = body.info.evolutions[index].hold_item;
+                    if (holdItem != null) {
+                        if (/[aeiouAEIOU]/.test(holdItem.charAt(0))) {
+                            evo = evo + " whilst holding an " + holdItem;
+                        } else {
+                            evo = evo + " whilst holding a " + holdItem;
+                        }
+                    }
+
+                    //What minimum level does it need?
+                    var level = body.info.evolutions[index].level;
+                    if (level != null) {
+                        evo = evo + " starting at level " + level;
+                    }
+
+                    //Does it require a level up to trigger?
+                    var levelUp = body.info.evolutions[index].level_up;
+                    if (levelUp != null) {
+                        evo = evo + " after a level up";
+                    }
+
+                    //Does it need happiness?
+                    var happy = body.info.evolutions[index].happiness;
+                    if (happy != null) {
+                        evo = evo + " with at least 220 friendship";
+                    }
+
+                    //Does it need a specific move?
+                    var move = body.info.evolutions[index].move_learned;
+                    if (move != null) {
+                        evo = evo + " knowing the move " + move;
+                    }
+
+                    //Does it need to satisfy certain conditions?
+                    var conditions = new Array();
+                    if (body.info.evolutions[index].conditions != null) {
+                        for (var i = 0; i < body.info.evolutions[index].conditions.length; i++) {
+                            conditions[i] = body.info.evolutions[index].conditions[i];
                         }
 
-                        //Does it need an item to be used on it?
-                        var item = body.info.evolutions[index].item;
-                        if (item != null) {
-                            if (/[aeiouAEIOU]/.test(item.charAt(0))) {
-                                evo = evo + " using an " + item;
+                        if (conditions != null) {
+                            if (conditions.length > 1) {
+                                evo = evo + " " + conditions.join(', ');
                             } else {
-                                evo = evo + " using a " + item;
+                                evo = evo + " " + conditions;
                             }
                         }
-
-                        //Does it need to hold an item?
-                        var holdItem = body.info.evolutions[index].hold_item;
-                        if (holdItem != null) {
-                            if (/[aeiouAEIOU]/.test(holdItem.charAt(0))) {
-                                evo = evo + " whilst holding an " + holdItem;
-                            } else {
-                                evo = evo + " whilst holding a " + holdItem;
-                            }
-                        }
-
-                        //What minimum level does it need?
-                        var level = body.info.evolutions[index].level;
-                        if (level != null) {
-                            evo = evo + " starting at level " + level;
-                        }
-
-                        //Does it require a level up to trigger?
-                        var levelUp = body.info.evolutions[index].level_up;
-                        if (levelUp != null) {
-                            evo = evo + " after a level up";
-                        }
-
-                        //Does it need happiness?
-                        var happy = body.info.evolutions[index].happiness;
-                        if (happy != null) {
-                            evo = evo + " with at least 220 friendship";
-                        }
-
-                        //Does it need a specific move?
-                        var move = body.info.evolutions[index].move_learned;
-                        if (move != null) {
-                            evo = evo + " knowing the move " + move;
-                        }
-
-                        //Does it need to satisfy certain conditions?
-                        var conditions = new Array();
-                        if (body.info.evolutions[index].conditions != null) {
-                            for (var i = 0; i < body.info.evolutions[index].conditions.length; i++) {
-                                conditions[i] = body.info.evolutions[index].conditions[i];
-                            }
-
-                            if (conditions != null) {
-                                if (conditions.length > 1) {
-                                    evo = evo + " " + conditions.join(', ');
-                                } else {
-                                    evo = evo + " " + conditions;
-                                }
-                            }
-                        }
-
-                        //After writing, add to list of evolutions
-                        evolutions[index] = evo;
-
-                    }
-                }
-
-                if (body.info.evolution_from == null) {
-                    prevolution = `N/A`;
-                } else {
-                    prevolution = body.info.evolution_from;
-                }
-
-                for (var index = 0; index < body.info.abilities.length; index++) {
-                    if (body.info.abilities[index].hidden == true) {
-                        abilities[index] = body.info.abilities[index].name + " [Hidden]";
-                    } else {
-                        abilities[index] = body.info.abilities[index].name;
                     }
 
+                    //After writing, add to list of evolutions
+                    evolutions[index] = evo;
+
                 }
+            }
 
-                var stats = new Array();
+            if (body.info.evolution_from == null) {
+                prevolution = `N/A`;
+            } else {
+                prevolution = body.info.evolution_from;
+            }
 
-                stats[0] = `HP: ` + body.info.base_stats.hp;
-                stats[1] = `ATK: ` + body.info.base_stats.atk;
-                stats[2] = `DEF: ` + body.info.base_stats.def;
-                stats[3] = `SPATK: ` + body.info.base_stats.sp_atk;
-                stats[4] = `SPDEF: ` + body.info.base_stats.sp_def;
-                stats[5] = `SPEED: ` + body.info.base_stats.speed;
-
-                var evTemp = new Array();
-                evTemp[0] = `HP: ` + body.info.ev_yield.hp;
-                evTemp[1] = `ATK: ` + body.info.ev_yield.atk;
-                evTemp[2] = `DEF: ` + body.info.ev_yield.def;
-                evTemp[3] = `SPATK: ` + body.info.ev_yield.sp_atk;
-                evTemp[4] = `SPDEF: ` + body.info.ev_yield.sp_def;
-                evTemp[5] = `SPEED: ` + body.info.ev_yield.speed;
-
-                var id = "" + body.info.national_id;
-
-                for (var index = id.length; index < 3; index++) {
-                    id = "0" + id;
-                }
-
-                var eggGroup = body.info.egg_groups;
-                var genderRatios = new Array();
-
-                if (body.info.gender_ratios == null) {
-                    genderRatios = "Genderless";
+            for (var index = 0; index < body.info.abilities.length; index++) {
+                if (body.info.abilities[index].hidden == true) {
+                    abilities[index] = body.info.abilities[index].name + " [Hidden]";
                 } else {
-                    genderRatios.push("Male: " + body.info.gender_ratios.male + "%");
-                    genderRatios.push("Female: " + body.info.gender_ratios.female + "%");
+                    abilities[index] = body.info.abilities[index].name;
                 }
-                var embed = new Discord.RichEmbed()
-                if (body.info.isGlitch) {
-                    embed.setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
-                    embed.setColor(0x0000C8)
-                    embed.addField(`__${body.info.encoder[0]}:__`, stats.join(", "), true)
-                    embed.addField(`__${body.info.encoder[1]}:__`, evTemp.join(", "), true)
-                    embed.addField(`__${body.info.encoder[2]}:__`, abilities, false)
-                    embed.addField(`__${body.info.encoder[3]}:__`, prevolution, false)
-                    embed.addField(`__${body.info.encoder[4]}:__`, evolutions, true)
-                } else {
-                    embed.setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
-                    embed.setColor(0x0000C8)
-                    embed.addField(`__Base Stats:__`, stats, true)
-                    embed.addField("__EV Yield:__", evTemp, true)
-                    embed.addField(`__Weight and Height:__`, body.info.height_us + "\n" + body.info.height_eu + "\n" + body.info.weight_us + "\n" + body.info.weight_eu, true)
-                    embed.addField(`__Abilities:__`, abilities, true)
-                    embed.addField("__Gender Ratio:__", genderRatios, true)
-                    embed.addField(`__Egg Group:__`, eggGroup, true)
-                    embed.addField("__Evolves From:__", prevolution, true)
-                    embed.addField("__Evolves Into:__", evolutions, false)
-                    if (isShiny) {
-                        embed.setThumbnail(shinyImages + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
-                    } else {
-                        embed.setThumbnail(images + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
-                    }
 
+            }
+
+            var stats = new Array();
+
+            stats[0] = `HP: ` + body.info.base_stats.hp;
+            stats[1] = `ATK: ` + body.info.base_stats.atk;
+            stats[2] = `DEF: ` + body.info.base_stats.def;
+            stats[3] = `SPATK: ` + body.info.base_stats.sp_atk;
+            stats[4] = `SPDEF: ` + body.info.base_stats.sp_def;
+            stats[5] = `SPEED: ` + body.info.base_stats.speed;
+
+            var evTemp = new Array();
+            evTemp[0] = `HP: ` + body.info.ev_yield.hp;
+            evTemp[1] = `ATK: ` + body.info.ev_yield.atk;
+            evTemp[2] = `DEF: ` + body.info.ev_yield.def;
+            evTemp[3] = `SPATK: ` + body.info.ev_yield.sp_atk;
+            evTemp[4] = `SPDEF: ` + body.info.ev_yield.sp_def;
+            evTemp[5] = `SPEED: ` + body.info.ev_yield.speed;
+
+            var id = "" + body.info.national_id;
+
+            for (var index = id.length; index < 3; index++) {
+                id = "0" + id;
+            }
+
+            var eggGroup = body.info.egg_groups;
+            var genderRatios = new Array();
+
+            if (body.info.gender_ratios == null) {
+                genderRatios = "Genderless";
+            } else {
+                genderRatios.push("Male: " + body.info.gender_ratios.male + "%");
+                genderRatios.push("Female: " + body.info.gender_ratios.female + "%");
+            }
+            var embed = new Discord.RichEmbed()
+            if (body.info.isGlitch) {
+                embed.setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
+                embed.setColor(0x0000C8)
+                embed.addField(`__${body.info.encoder[0]}:__`, stats.join(", "), true)
+                embed.addField(`__${body.info.encoder[1]}:__`, evTemp.join(", "), true)
+                embed.addField(`__${body.info.encoder[2]}:__`, abilities, false)
+                embed.addField(`__${body.info.encoder[3]}:__`, prevolution, false)
+                embed.addField(`__${body.info.encoder[4]}:__`, evolutions, true)
+            }
+            else {
+                embed.setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
+                embed.setColor(0x0000C8)
+                embed.addField(`__Base Stats:__`, stats, true)
+                embed.addField("__EV Yield:__", evTemp, true)
+                embed.addField(`__Weight and Height:__`, body.info.height_us + "\n" + body.info.height_eu + "\n" + body.info.weight_us + "\n" + body.info.weight_eu, true)
+                embed.addField(`__Abilities:__`, abilities, true)
+                embed.addField("__Gender Ratio:__", genderRatios, true)
+                embed.addField(`__Egg Group:__`, eggGroup, true)
+                embed.addField("__Evolves From:__", prevolution, true)
+                embed.addField("__Evolves Into:__", evolutions, false)
+                if (isShiny) {
+                    embed.setThumbnail(shinyImages + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
+                } else {
+                    embed.setThumbnail(images + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
                 }
-                message.channel.send("", {
-                    embed: embed
-                }).catch(console.error)
-            })
+            }
+            message.channel.send(embed).catch(console.error);
 
             logCommand(message);
             break;
@@ -1082,28 +1003,25 @@ bot.on("message", async function (message) {
 
             var apifull = api + route;
 
-            snekfetch.get(apifull).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apifull);
 
-                var embed = new Discord.RichEmbed()
-                    .setTitle(`Timed Events || ${body.day}`)
-                    .addField("Daily Reset", `${body.dailyReset}`, true)
-                    .addField("Contests", `**Bug Contest:** ${body.bug}`, true)
-                    .addField("S.S. Aqua", `**To Olivine:** ${body.olivine}\n**To Vermilion:** ${body.vermilion}`, true)
-                    .addField("Week Siblings", `**Monday:** ${body.mon}\n**Tuesday:** ${body.tue}\n**Wednesday:** ${body.wed}\n**Thursday:** ${body.thur}\n**Friday:** ${body.fri}\n**Saturday:** ${body.sat}\n**Sunday:** ${body.sun}`, true)
-                    .addField('Underground', `**Hairdresser 1:** ${body.hairdresser1}\n**Hairdresser 2:** ${body.hairdresser2}\n**Herb Shop:** ${body.herbshop}`, true)
-                    .addField("Maps", `**Union Cave BF2:** ${body.unioncaveb2f}\n**Lake of Rage:** ${body.rage}\n**MooMoo Farm:** ${body.moomoofarm}`, true)
-                message.channel.send("", {
-                    embed: embed
-                }).catch(console.error)
+            var embed = new Discord.RichEmbed()
+                .setTitle(`Timed Events || ${body.day}`)
+                .addField("Daily Reset", `${body.dailyReset}`, true)
+                .addField("Contests", `**Bug Contest:** ${body.bug}`, true)
+                .addField("S.S. Aqua", `**To Olivine:** ${body.olivine}\n**To Vermilion:** ${body.vermilion}`, true)
+                .addField("Week Siblings", `**Monday:** ${body.mon}\n**Tuesday:** ${body.tue}\n**Wednesday:** ${body.wed}\n**Thursday:** ${body.thur}\n**Friday:** ${body.fri}\n**Saturday:** ${body.sat}\n**Sunday:** ${body.sun}`, true)
+                .addField('Underground', `**Hairdresser 1:** ${body.hairdresser1}\n**Hairdresser 2:** ${body.hairdresser2}\n**Herb Shop:** ${body.herbshop}`, true)
+                .addField("Maps", `**Union Cave BF2:** ${body.unioncaveb2f}\n**Lake of Rage:** ${body.rage}\n**MooMoo Farm:** ${body.moomoofarm}`, true)
+            message.channel.send(embed).catch(console.error);
 
-            });
             logCommand(message);
             break;
         case "tm":
             if (!args[1]) {
                 return message.channel.send(`Please input a Pokemon - use **${prefix}help pokeone** for more info!`);
             }
+
             var search = args.splice(1, args.length);
             var isShiny = false;
             if (search[0].toLowerCase() == "shiny") {
@@ -1111,79 +1029,75 @@ bot.on("message", async function (message) {
                 isShiny = true;
             }
             search = search.join(" ").toLowerCase();
-            var route = "/public/pokemon/";
 
+            var route = "/public/pokemon/";
             var apifull = api + route + search;
 
-            snekfetch.get(apifull).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apifull);
 
-                if (body.status == "404") {
-                    return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
-                }
+            if (body.status == "404") {
+                return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
+            }
 
-                var tmList = new Array();
+            var tmList = new Array();
 
-                var hms = new Array();
-                hms[0] = "HM08 - Rock Climb";
-                hms[1] = "HM09 - Flash";
-                hms[2] = "HM10 - Defog";
-                hms[3] = "HM11 - Whirlpool";
+            var hms = new Array();
+            hms[0] = "HM08 - Rock Climb";
+            hms[1] = "HM09 - Flash";
+            hms[2] = "HM10 - Defog";
+            hms[3] = "HM11 - Whirlpool";
 
-                var hmList = new Array();
+            var hmList = new Array();
 
-                for (var index = 0; index < body.info.move_learnsets[0].tm_learnset.length; index++) {
-                    if (body.info.move_learnsets[0].tm_learnset[index].tm != null) {
-                        var skip = false;
-                        hms.forEach(element => {
-                            if (element.substring(7) == body.info.move_learnsets[0].tm_learnset[index].move) {
-                                //skips this iteration, but add it to an hm's list
-                                hmList.push(element);
-                                skip = true;
-                            }
-                        });
-                        //if it's an hm from 1-7 take it out anyways for sorting
-                        if (body.info.move_learnsets[0].tm_learnset[index].tm.charAt(0) == "H") {
-                            hmList.push(body.info.move_learnsets[0].tm_learnset[index].tm + " - " + body.info.move_learnsets[0].tm_learnset[index].move);
+            for (var index = 0; index < body.info.move_learnsets[0].tm_learnset.length; index++) {
+                if (body.info.move_learnsets[0].tm_learnset[index].tm != null) {
+                    var skip = false;
+                    hms.forEach(element => {
+                        if (element.substring(7) == body.info.move_learnsets[0].tm_learnset[index].move) {
+                            //skips this iteration, but add it to an hm's list
+                            hmList.push(element);
                             skip = true;
                         }
-                        if (!skip) {
-                            tmList.push(body.info.move_learnsets[0].tm_learnset[index].tm + " - " + body.info.move_learnsets[0].tm_learnset[index].move);
-                        }
+                    });
+                    //if it's an hm from 1-7 take it out anyways for sorting
+                    if (body.info.move_learnsets[0].tm_learnset[index].tm.charAt(0) == "H") {
+                        hmList.push(body.info.move_learnsets[0].tm_learnset[index].tm + " - " + body.info.move_learnsets[0].tm_learnset[index].move);
+                        skip = true;
+                    }
+                    if (!skip) {
+                        tmList.push(body.info.move_learnsets[0].tm_learnset[index].tm + " - " + body.info.move_learnsets[0].tm_learnset[index].move);
                     }
                 }
+            }
 
-                hmList.sort();
-                hmList.reverse();
+            hmList.sort();
+            hmList.reverse();
 
-                hmList.forEach(element => {
-                    tmList.unshift(element);
-                });
-
-                if (tmList.length == 0) {
-                    var tmList = `${body.info.names} cannot learn any TMs nor HMs!`;
-                }
-
-                //able to split into two columns with 2 lines of code rather than like 20
-                var tmListTwo = new Array();
-
-                tmListTwo = tmList.splice((tmList.length + (tmList.length % 2)) / 2, tmList.length - (tmList.length - (tmList.length % 2)) / 2);
-
-                var embed = new Discord.RichEmbed()
-                    .setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
-                    .setColor(0x0000C8)
-                    .addField("TM/HM List", tmList, true)
-                    .addField("\u200b", tmListTwo, true)
-                if (isShiny) {
-                    embed.setThumbnail(shinyImages + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
-                } else {
-                    embed.setThumbnail(images + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
-                }
-                message.channel.send("Gen 7 Pokemon may have wrong TM's HM's ATM!", {
-                    embed: embed
-                }).catch(console.error)
-
+            hmList.forEach(element => {
+                tmList.unshift(element);
             });
+
+            if (tmList.length == 0) {
+                var tmList = `${body.info.names} cannot learn any TMs nor HMs!`;
+            }
+
+            //able to split into two columns with 2 lines of code rather than like 20
+            var tmListTwo = new Array();
+
+            tmListTwo = tmList.splice((tmList.length + (tmList.length % 2)) / 2, tmList.length - (tmList.length - (tmList.length % 2)) / 2);
+
+            var embed = new Discord.RichEmbed()
+                .setTitle(`#${body.info.national_id} || ${body.info.name} || ${body.info.types.join('/')}`)
+                .setColor(0x0000C8)
+                .addField("TM/HM List", tmList, true)
+                .addField("\u200b", tmListTwo, true)
+            if (isShiny) {
+                embed.setThumbnail(shinyImages + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
+            } else {
+                embed.setThumbnail(images + `${(body.info.name).toLowerCase().replace(/\W/g, '')}.gif`);
+            }
+            message.channel.send("Gen 7 Pokemon may have wrong TM's HM's ATM!", { embed: embed }).catch(console.error);
+
             logCommand(message);
             break;
         case "type":
@@ -1199,38 +1113,33 @@ bot.on("message", async function (message) {
 
                 var apifull = api + route + search;
 
-                snekfetch.get(apifull).then(r => {
-                    var body = r.body
+                var { body } = await snekfetch.get(apifull);
 
-                    if (body.status == "404") {
-                        return message.channel.send(`Type: \`${search}\` not found. Please double check spelling!`);;
-                    }
-                    var deals = new Array();
-                    var takes = new Array();
-                    for (var index = 0; index < 18; index++) {
-                        var temp = body.info.attacking[index];
-                        var array = temp.split(" ");
-                        temp = array[1] + "x to " + array[0];
-                        deals.push(temp);
-                    }
-                    for (var index = 0; index < 18; index++) {
-                        var temp = body.info.defending[index];
-                        var array = temp.split(" ");
-                        temp = array[1] + "x from " + array[0];
-                        takes.push(temp);
-                    }
-                    var embed = new Discord.RichEmbed()
-                        .setTitle(`${body.info.name}`)
-                        .setColor(parseInt(body.info.colour, 16))
-                        .addField(`__Deals:__`, deals, true)
-                        .addField(`__Takes:__`, takes, true)
+                if (body.status == "404") {
+                    return message.channel.send(`Type: \`${search}\` not found. Please double check spelling!`);;
+                }
+                var deals = new Array();
+                var takes = new Array();
+                for (var index = 0; index < 18; index++) {
+                    var temp = body.info.attacking[index];
+                    var array = temp.split(" ");
+                    temp = array[1] + "x to " + array[0];
+                    deals.push(temp);
+                }
+                for (var index = 0; index < 18; index++) {
+                    var temp = body.info.defending[index];
+                    var array = temp.split(" ");
+                    temp = array[1] + "x from " + array[0];
+                    takes.push(temp);
+                }
 
+                var embed = new Discord.RichEmbed()
+                    .setTitle(`${body.info.name}`)
+                    .setColor(parseInt(body.info.colour, 16))
+                    .addField(`__Deals:__`, deals, true)
+                    .addField(`__Takes:__`, takes, true)
+                message.channel.send(embed).catch(console.error);
 
-                    message.channel.send("", {
-                        embed: embed
-                    }).catch(console.error)
-
-                });
                 logCommand(message);
                 break;
             }
@@ -1249,66 +1158,62 @@ bot.on("message", async function (message) {
 
             var name = "";
 
-            snekfetch.get(apiOne).then(r => {
-                var body = r.body
+            var { body } = await snekfetch.get(apiOne);
 
-                if (body.status == "404") {
-                    return message.channel.send(`Type: \`${searchOne}\` not found. Please double check spelling!`);;
-                }
+            if (body.status == "404") {
+                return message.channel.send(`Type: \`${searchOne}\` not found. Please double check spelling!`);;
+            }
 
-                for (var index = 0; index < 18; index++) {
-                    var temp = body.info.attacking[index];
-                    var array = temp.split(" ");
-                    temp = array[1] + "x to " + array[0];
-                    dealsOne.push(temp);
-                }
-                for (var index = 0; index < 18; index++) {
-                    var temp = body.info.defending[index].split(" ")[1];
-                    takesOne.push(temp);
-                }
-                name = body.info.name;
-                var colour = body.info.colour;
+            for (var index = 0; index < 18; index++) {
+                var temp = body.info.attacking[index];
+                var array = temp.split(" ");
+                temp = array[1] + "x to " + array[0];
+                dealsOne.push(temp);
+            }
+            for (var index = 0; index < 18; index++) {
+                var temp = body.info.defending[index].split(" ")[1];
+                takesOne.push(temp);
+            }
+            name = body.info.name;
+            var colour = body.info.colour;
 
-                snekfetch.get(apiTwo).then(r => {
-                    var body = r.body
+            var { body } = await snekfetch.get(apiTwo);
 
-                    if (body.status == "404") {
-                        return message.channel.send(`Type: \`${searchTwo}\` not found. Please double check spelling!`);;
-                    }
+            if (body.status == "404") {
+                return message.channel.send(`Type: \`${searchTwo}\` not found. Please double check spelling!`);;
+            }
 
-                    for (var index = 0; index < 18; index++) {
-                        var temp = body.info.attacking[index];
-                        var array = temp.split(" ");
-                        temp = array[1] + "x to " + array[0];
-                        dealsTwo.push(temp);
-                    }
+            for (var index = 0; index < 18; index++) {
+                var temp = body.info.attacking[index];
+                var array = temp.split(" ");
+                temp = array[1] + "x to " + array[0];
+                dealsTwo.push(temp);
+            }
 
-                    for (var index = 0; index < 18; index++) {
-                        var firstTypeMultiplier = takesOne[index];
-                        var secondTypeMultiplier = body.info.defending[index].split(" ")[1];
+            for (var index = 0; index < 18; index++) {
+                var firstTypeMultiplier = takesOne[index];
+                var secondTypeMultiplier = body.info.defending[index].split(" ")[1];
 
-                        var finalMultiplier = parseFloat(firstTypeMultiplier) * parseFloat(secondTypeMultiplier);
+                var finalMultiplier = parseFloat(firstTypeMultiplier) * parseFloat(secondTypeMultiplier);
 
-                        var temp = finalMultiplier + "x from " + body.info.defending[index].split(" ")[0];
-                        takesTogether.push(temp);
-                    }
+                var temp = finalMultiplier + "x from " + body.info.defending[index].split(" ")[0];
+                takesTogether.push(temp);
+            }
 
-                    tempName = name;
-                    name = tempName + "/" + body.info.name
+            tempName = name;
+            name = tempName + "/" + body.info.name
 
-                    var embed = new Discord.RichEmbed()
-                        .setTitle(name)
-                        .setColor(parseInt(colour, 16))
-                        .addField(`__${name.split("/")[0]} Deals:__`, dealsOne, true)
-                        .addField(`__${name.split("/")[1]} Deals:__`, dealsTwo, true)
-                        .addField(`__Together Takes:__`, takesTogether, true)
-                    message.channel.send("", {
-                        embed: embed
-                    }).catch(console.error)
-                });
-            });
+            var embed = new Discord.RichEmbed()
+                .setTitle(name)
+                .setColor(parseInt(colour, 16))
+                .addField(`__${name.split("/")[0]} Deals:__`, dealsOne, true)
+                .addField(`__${name.split("/")[1]} Deals:__`, dealsTwo, true)
+                .addField(`__Together Takes:__`, takesTogether, true)
+            message.channel.send(embed).catch(console.error);
+
             logCommand(message);
             break;
+        //End
         default:
             break;
     }
