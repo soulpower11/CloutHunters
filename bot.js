@@ -12,7 +12,7 @@ const images = process.env.IMAGES;
 
 var bot = new Discord.Client();
 
-var gamestring = `${prefix}help | v5.0.0`;
+var gamestring = `${prefix}help | v6.0.0`;
 
 function getAlias(command) {
     if (command.toLocaleLowerCase() == "a") {
@@ -41,6 +41,9 @@ function getAlias(command) {
     }
     else if (command.toLocaleLowerCase() == "loc" || command.toLocaleLowerCase() == "spawn") {
         return "location";
+    }
+    else if (command.toLocaleLowerCase() == "enc" || command.toLocaleLowerCase() == "en") {
+        return "encounter";
     }
     else {
         return command;
@@ -180,7 +183,7 @@ bot.on("message", async function (message) {
                         + "**PokeOne:**\n"
                         + "`ability`, `eggmove`, `hp`, `learnset`, `move`\n"
                         + "`nature`, `pokemon`, `time`, `tm`, `type`\n"
-                        + "`location``"
+                        + "`location`, `encounter`"
                     )
                     .setFooter(`Type ${prefix}help [group] for more information.`)
                 message.channel.send(embed);
@@ -214,6 +217,7 @@ bot.on("message", async function (message) {
                             + "\n`" + prefix + "tm [pokemon name]` - Lists the available TMs and HMs that can be learnt by given Pokemon."
                             + "\n`" + prefix + "type [type]` - Lists type advantages and disadvantages for given type, or type combination."
                             + "\n`" + prefix + "location [location name]` - Lists Pokemon encounters at the location."
+                            + "\n`" + prefix + "encounter [pokemon name] (region)` - Lists Locations where the Pokemon can be encountered."
                         );
                         break;
                     default:
@@ -1240,7 +1244,7 @@ bot.on("message", async function (message) {
             }
 
             if (body.data.region == "Kanto") {
-                color = 0x80BB1D
+                color = 0x80BB1D;
             }
             else if (body.data.region == "Johto") {
                 color = 0xCAC02E;
@@ -1260,6 +1264,127 @@ bot.on("message", async function (message) {
             }
 
             message.channel.send(embed).catch(console.error);
+
+            logCommand(message);
+            break;
+        case "encounter":
+            if (!args[1]) {
+                return message.channel.send(`Please input a Pokemon - use **${prefix}help pokeone** for more info!`);
+            }
+
+            var search = args.splice(1, args.length);
+            var isShiny = false;
+            var isKanto = true;
+            var isJohto = true;
+            if (search[0].toLowerCase() == "shiny") {
+                search.splice(0, 1);
+                isShiny = true;
+            }
+
+            if (search[1] && search[1].toLowerCase() == "kanto") {
+                search.splice(1, 1);
+                isJohto = false;
+            }
+            else if (search[2] && search[2].toLowerCase() == "kanto") {
+                search.splice(1, 1);
+                isJohto = false;
+            }
+            else if (search[1] && search[1].toLowerCase() == "johto") {
+                search.splice(1, 1);
+                isKanto = false;
+            }
+            else if (search[2] && search[2].toLowerCase() == "johto") {
+                search.splice(1, 1);
+                isKanto = false;
+            }
+            search = search.join(" ").toLowerCase();
+
+            var route = "/public/encounters/";
+            var apifull = api + route + search;
+
+            var { body } = await snekfetch.get(apifull);
+
+            if (body.status == "404") {
+                return message.channel.send(`Pokemon: \`${search}\` not found. Please double check spelling!`);
+            }
+
+            var region = {
+                "Kanto": [],
+                "Johto": []
+            }
+
+            var k = 0;
+            var j = 0;
+            body.data.location.forEach(function (r) {
+                if (r.region == "Kanto") {
+                    var locationInfo = {
+                        "area": r.area,
+                        "time of day": r["time of day"],
+                        "encounter method": r["encounter method"],
+                        "rarity": r.rarity
+                    }
+                    region.Kanto[k] = locationInfo;
+                    k++;
+                }
+                else if (r.region == "Johto") {
+                    var locationInfo = {
+                        "area": r.area,
+                        "time of day": r["time of day"],
+                        "encounter method": r["encounter method"],
+                        "rarity": r.rarity
+                    }
+                    region.Johto[j] = locationInfo;
+                    j++;
+                }
+            })
+
+            if (region.Kanto.length != 0 && isKanto) {
+                var kanto = new Discord.RichEmbed()
+                    .setTitle(`${body.data.pokemon} (Kanto)`)
+                    .setColor(0x80BB1D)
+                    .setDescription(`**Encounter Locations:**`)
+                    .setFooter(`ToD = Time of Day, EM = Encounter Method, M = Morning, D = Day, N = Night, E = Evening`)
+                for (var index = 0; index < region.Kanto.length; index++) {
+                    kanto.addField(`__${region.Kanto[index].area}__`,
+                        `**ToD:** ${region.Kanto[index]["time of day"]}` +
+                        `\n**EM:** ${region.Kanto[index]["encounter method"]}` +
+                        `\n**Rarity:** ${region.Kanto[index].rarity}`
+                        , true);
+                }
+                if (isShiny) {
+                    kanto.setThumbnail(shinyImages + `${(body.data.pokemon).toLowerCase().replace(/\W/g, '')}.gif`);
+                } else {
+                    kanto.setThumbnail(images + `${(body.data.pokemon).toLowerCase().replace(/\W/g, '')}.gif`);
+                }
+                message.channel.send(kanto).catch(console.error);
+            }
+            else if (isKanto && !isJohto) {
+                return message.channel.send(`Pokemon: \`${body.data.pokemon}\` cannot be encountered in Kanto.`);
+            }
+
+            if (region.Johto.length != 0 && isJohto) {
+                var johto = new Discord.RichEmbed()
+                    .setTitle(`${body.data.pokemon} (Johto)`)
+                    .setColor(0xCAC02E)
+                    .setDescription(`**Encounter Locations:**`)
+                    .setFooter(`ToD = Time of Day, EM = Encounter Method, M = Morning, D = Day, N = Night, E = Evening`)
+                for (var index = 0; index < region.Johto.length; index++) {
+                    johto.addField(`__${region.Johto[index].area}__`,
+                        `**ToD:** ${region.Johto[index]["time of day"]}` +
+                        `\n**EM:** ${region.Johto[index]["encounter method"]}` +
+                        `\n**Rarity:** ${region.Johto[index].rarity}`
+                        , true);
+                }
+                if (isShiny) {
+                    johto.setThumbnail(shinyImages + `${(body.data.pokemon).toLowerCase().replace(/\W/g, '')}.gif`);
+                } else {
+                    johto.setThumbnail(images + `${(body.data.pokemon).toLowerCase().replace(/\W/g, '')}.gif`);
+                }
+                message.channel.send(johto).catch(console.error);
+            }
+            else if (isJohto && !isKanto) {
+                return message.channel.send(`Pokemon: \`${body.data.pokemon}\` cannot be encountered in Johto.`);
+            }
 
             logCommand(message);
             break;
